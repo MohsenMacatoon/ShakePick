@@ -23,6 +23,25 @@
   };
 
   const canVibrate = typeof navigator.vibrate === 'function';
+
+  // Android only allows vibration after the page has been tapped at least once
+  // since it opened (a shake doesn't count). We remember whether that happened.
+  let tapped = false;
+  ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
+    window.addEventListener(ev, () => { tapped = true; }, { capture: true, passive: true }));
+  const hasActivation = () =>
+    tapped || !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
+  let vibrateHintShown = false;
+
+  function buzz(pattern) {
+    if (!state.vibrate || !canVibrate) return;
+    let ok = false;
+    try { ok = navigator.vibrate(pattern); } catch (e) { ok = false; }
+    if (!ok && !hasActivation() && !vibrateHintShown) {
+      vibrateHintShown = true;
+      toast('Tap the screen once to turn on vibration');
+    }
+  }
   const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -221,12 +240,13 @@
     busy = true;
     const winner = list.items[randomIndex(n)]; // decided now, revealed after mixing
     setResult('Mixing…', true);
+    buzz([60, 80, 60, 80, 60]);   // a rattle while the ice mixes
     glass.stir(1);
     await wait(reduceMotion ? 0 : MIX_TIME);
     await glass.lift(winner.id);
 
     setResult(winner.text);
-    if (state.vibrate && canVibrate) navigator.vibrate([30, 50, 70]);
+    buzz([0, 40, 250]);           // a strong buzz when the pick comes up
     winner.count++;
     list.history.unshift(winner.text);
     list.history = list.history.slice(0, HISTORY_SIZE);
@@ -319,8 +339,9 @@
   el.clearBtn.addEventListener('click', async () => {
     const list = current();
     if (!list.items.length || busy) return;
-    if (!(await askConfirm({ title: 'Clear all ' + list.items.length + ' items?', text: 'The list “' + list.name + '” stays, but it will be empty.', ok: 'Clear', danger: true }))) return;
+    if (!(await askConfirm({ title: 'Clear all ' + list.items.length + ' items?', text: 'This also clears the recent picks. The list “' + list.name + '” stays, but it will be empty.', ok: 'Clear', danger: true }))) return;
     list.items = [];
+    list.history = [];
     save();
     render();
     showReadyText();
@@ -340,7 +361,11 @@
   el.deleteListBtn.addEventListener('click', deleteList);
 
   el.optRemove.addEventListener('change', () => { state.removeAfter = el.optRemove.checked; save(); });
-  el.optVibrate.addEventListener('change', () => { state.vibrate = el.optVibrate.checked; save(); });
+  el.optVibrate.addEventListener('change', () => {
+    state.vibrate = el.optVibrate.checked;
+    save();
+    if (state.vibrate) buzz(200);   // a test buzz, so you can feel that it works
+  });
 
   // ----- Shaking -----
   // Shaking is the only way to pick on a phone. Tapping the glass just splashes.
