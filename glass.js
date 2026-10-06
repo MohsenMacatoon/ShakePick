@@ -92,7 +92,11 @@
       let dropIndex = 0;
       items.slice(0, TUNING.maxCubes).forEach(it => {
         const c = have.get(it.id);
-        if (c) { if (c.text !== it.text) { c.text = it.text; c.font = null; c.bigFont = null; } return; }
+        if (c) {
+          if (c.state === 'removing') { c.state = 'live'; c.alpha = 1; }   // came back before it faded out
+          if (c.text !== it.text) { c.text = it.text; c.font = null; c.bigFont = null; }
+          return;
+        }
         const r = geo ? cubeSize(items.length) : 24;
         const x = geo ? geo.cx + rand(-0.6, 0.6) * (geo.botHalf - r) : 0;
         cubes.push({
