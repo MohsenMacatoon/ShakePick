@@ -18,36 +18,16 @@
     listSelect: $('listSelect'), newListBtn: $('newListBtn'), renameListBtn: $('renameListBtn'), deleteListBtn: $('deleteListBtn'),
     form: $('addForm'), input: $('itemInput'), list: $('list'), empty: $('empty'),
     resetCountsBtn: $('resetCountsBtn'), clearBtn: $('clearBtn'),
-    optRemove: $('optRemove'), optVibrate: $('optVibrate'), vibrateRow: $('vibrateRow'),
+    optRemove: $('optRemove'),
     historyBox: $('historyBox'), history: $('history')
   };
 
-  const canVibrate = typeof navigator.vibrate === 'function';
-
-  // Android only allows vibration after the page has been tapped at least once
-  // since it opened (a shake doesn't count). We remember whether that happened.
-  let tapped = false;
-  ['pointerdown', 'keydown', 'touchstart'].forEach(ev =>
-    window.addEventListener(ev, () => { tapped = true; }, { capture: true, passive: true }));
-  const hasActivation = () =>
-    tapped || !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
-  let vibrateHintShown = false;
-
-  function buzz(pattern) {
-    if (!state.vibrate || !canVibrate) return;
-    let ok = false;
-    try { ok = navigator.vibrate(pattern); } catch (e) { ok = false; }
-    if (!ok && !hasActivation() && !vibrateHintShown) {
-      vibrateHintShown = true;
-      toast('Tap the screen once to turn on vibration');
-    }
-  }
   const reduceMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const wait = ms => new Promise(r => setTimeout(r, ms));
 
   // ----- Data -----
-  // { lists: [{ id, name, items: [{ id, text, count }], history: [text] }], currentId, removeAfter, vibrate }
+  // { lists: [{ id, name, items: [{ id, text, count }], history: [text] }], currentId, removeAfter }
   let state = null;
   let busy = false;
 
@@ -62,19 +42,18 @@
     } catch (e) { /* start fresh */ }
     if (!state) {
       // Bring over the list from the first version of the app, if there is one
-      let oldItems = [], oldHistory = [], removeAfter = false, vibrate = true;
+      let oldItems = [], oldHistory = [], removeAfter = false;
       try {
         const old = JSON.parse(localStorage.getItem(OLD_KEY));
         if (old) {
           oldItems = (old.items || []).filter(s => typeof s === 'string').slice(0, MAX_ITEMS);
           oldHistory = (old.history || []).filter(s => typeof s === 'string');
           removeAfter = old.removeAfter === true;
-          vibrate = old.vibrate !== false;
         }
       } catch (e) { /* ignore */ }
       const first = newList('My list', oldItems);
       first.history = oldHistory.slice(0, HISTORY_SIZE);
-      state = { lists: [first], currentId: first.id, removeAfter, vibrate };
+      state = { lists: [first], currentId: first.id, removeAfter };
       save();
     }
     if (!state.lists.find(l => l.id === state.currentId)) state.currentId = state.lists[0].id;
@@ -240,13 +219,11 @@
     busy = true;
     const winner = list.items[randomIndex(n)]; // decided now, revealed after mixing
     setResult('Mixing…', true);
-    buzz([60, 80, 60, 80, 60]);   // a rattle while the ice mixes
     glass.stir(1);
     await wait(reduceMotion ? 0 : MIX_TIME);
     await glass.lift(winner.id);
 
     setResult(winner.text);
-    buzz([0, 40, 250]);           // a strong buzz when the pick comes up
     winner.count++;
     list.history.unshift(winner.text);
     list.history = list.history.slice(0, HISTORY_SIZE);
@@ -361,11 +338,6 @@
   el.deleteListBtn.addEventListener('click', deleteList);
 
   el.optRemove.addEventListener('change', () => { state.removeAfter = el.optRemove.checked; save(); });
-  el.optVibrate.addEventListener('change', () => {
-    state.vibrate = el.optVibrate.checked;
-    save();
-    if (state.vibrate) buzz(200);   // a test buzz, so you can feel that it works
-  });
 
   // ----- Shaking -----
   // Shaking is the only way to pick on a phone. Tapping the glass just splashes.
@@ -428,8 +400,6 @@
   // ----- Start -----
   load();
   el.optRemove.checked = state.removeAfter;
-  el.optVibrate.checked = state.vibrate;
-  el.vibrateRow.hidden = !canVibrate; // iPhone browsers can't vibrate
   render();
   const h = current().history;
   if (h.length) setResult(h[0], false); else showReadyText();
