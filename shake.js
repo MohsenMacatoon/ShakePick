@@ -11,8 +11,12 @@
 
   let onShake = null;
   let onReady = null;
-  let onMotion = null;      // gets every movement, so the water can slosh
-  let hp = null;            // for phones that only report acceleration with gravity
+  let onMotion = null;      // gets every reading, so the water can tilt and slosh
+  let grav = null;          // smoothed gravity, for phones that don't separate it
+  // iPhone and Android report motion with opposite signs. We work out which one
+  // this phone uses from how it's held (top of the screen up), then flip if needed.
+  let signVotes = 0;
+  let sign = 0;             // 0 = not decided yet, 1 = standard, -1 = flipped
   let listening = false;
   let gotReading = false;
   let last = null;
@@ -28,19 +32,7 @@
       if (onReady) onReady(); // sensor is working
     }
 
-    // Movement without gravity, in m/s² (x = right, y = up on the screen).
-    if (onMotion) {
-      const lin = e.acceleration;
-      if (lin && lin.x !== null && lin.y !== null) {
-        onMotion(lin.x, lin.y);
-      } else {
-        // Remove gravity with a simple high-pass filter
-        if (!hp) hp = { gx: a.x, gy: a.y };
-        hp.gx = hp.gx * 0.9 + a.x * 0.1;
-        hp.gy = hp.gy * 0.9 + a.y * 0.1;
-        onMotion(a.x - hp.gx, a.y - hp.gy);
-      }
-    }
+    if (onMotion) reportMotion(e, a);
 
     if (!last) { last = { x: a.x, y: a.y, z: a.z }; return; }
 
@@ -59,6 +51,44 @@
       lastShakeAt = now;
       if (onShake) onShake();
     }
+  }
+
+  // Turns a phone-axis vector into screen directions (x = right, y = down),
+  // taking screen rotation (portrait/landscape) into account.
+  function toScreen(vx, vy) {
+    const deg = (screen.orientation && typeof screen.orientation.angle === 'number')
+      ? screen.orientation.angle : (window.orientation || 0);
+    const r = deg * Math.PI / 180, c = Math.cos(r), s = Math.sin(r);
+    return { x: vx * c - vy * s, y: -vx * s - vy * c };
+  }
+
+  function reportMotion(e, a) {
+    // Gravity (as the phone measures it) and movement without gravity, phone axes
+    const lin = e.acceleration;
+    let gx, gy, mx, my;
+    if (lin && lin.x !== null && lin.y !== null) {
+      gx = a.x - lin.x; gy = a.y - lin.y; mx = lin.x; my = lin.y;
+    } else {
+      if (!grav) grav = { x: a.x, y: a.y };
+      grav.x = grav.x * 0.85 + a.x * 0.15;
+      grav.y = grav.y * 0.85 + a.y * 0.15;
+      gx = grav.x; gy = grav.y; mx = a.x - grav.x; my = a.y - grav.y;
+    }
+
+    // Which way does "down" point on screen? (Standard phones report the
+    // opposite of gravity, so a phone held upright reads +9.8 upward.)
+    let down = toScreen(-gx, -gy);
+    if (sign === 0) {
+      if (Math.abs(down.y) > 5) signVotes += down.y > 0 ? 1 : -1;
+      if (Math.abs(signVotes) >= 12) sign = signVotes > 0 ? 1 : -1;
+    }
+    const f = sign || 1;
+    down = { x: down.x * f, y: down.y * f };
+    const move = toScreen(mx * f, my * f);
+
+    // move: phone acceleration on screen (m/s², x right, y down)
+    // down: direction of gravity on screen (m/s²), or null until we're sure of the sign
+    onMotion(move.x, move.y, sign ? down : null);
   }
 
   function listen() {

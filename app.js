@@ -380,7 +380,7 @@
     if (tapFallback && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(); }
   });
 
-  const shakeStatus = Shake.init(pick, shakeReady, (ax, ay) => glass.motion(ax, ay));
+  const shakeStatus = Shake.init(pick, shakeReady, (ax, ay, down) => glass.motion(ax, ay, down));
 
   if (shakeStatus === 'needs-permission') {
     el.allowBtn.hidden = false;

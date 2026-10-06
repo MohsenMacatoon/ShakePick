@@ -16,7 +16,9 @@
     waveStiffness: 55,    // how fast the surface springs back
     waveDamping: 2.6,     // how quickly ripples fade
     waveSpread: 1400,     // how far ripples travel
-    motionScale: 70,      // phone acceleration (m/s²) to screen push (px/s²)
+    motionScale: 90,      // phone acceleration (m/s²) to screen push (px/s²)
+    sloshStrength: 1.6,   // how much side-to-side movement tips the water
+    maxTilt: 55,          // degrees; past this the water just stays at the side
     maxCubes: 60
   };
 
@@ -35,6 +37,8 @@
     let running = false, lastT = 0, idle = 0;
     let pushX = 0, pushY = 0;           // phone movement waiting to be applied
     let swirl = 0;                      // seconds of stirring left
+    let tilt = 0;                       // radians: how far the phone is tipped
+    let tiltTarget = 0;
     let lifted = null;                  // the cube shown as the result
 
     // ----- Size and shape of the glass -----
@@ -109,13 +113,21 @@
     }
 
     // ----- Outside forces -----
-    // Phone movement in m/s² (x right, y up). Contents lag behind the glass.
-    function motion(ax, ay) {
+    // ax, ay: phone movement on screen (m/s², x right, y down). The contents lag behind.
+    // down:   direction of gravity on screen ({x, y} in m/s²), or null if unknown.
+    function motion(ax, ay, down) {
       if (reduced) return;
       const k = TUNING.motionScale;
       pushX = clamp(pushX - ax * k, -2600, 2600);
-      pushY = clamp(pushY + ay * k, -2600, 2600);
+      pushY = clamp(pushY - ay * k, -2600, 2600);
       if (Math.abs(ax) + Math.abs(ay) > 0.6) wake();
+      if (down) {
+        const flatness = Math.hypot(down.x, down.y);
+        // Lying flat on a table: gravity points into the screen, so no tilt.
+        const next = flatness < 3 ? 0 : clamp(Math.atan2(down.x, down.y), -TUNING.maxTilt * Math.PI / 180, TUNING.maxTilt * Math.PI / 180);
+        tiltTarget = tiltTarget * 0.8 + next * 0.2;   // smooth out sensor noise
+        if (Math.abs(tiltTarget - tilt) > 0.004) wake();
+      }
     }
 
     // A strong mix, used for every pick.
@@ -208,6 +220,8 @@
       pushX *= Math.exp(-14 * dt); pushY *= Math.exp(-14 * dt);
 
       // Water surface
+      tilt += (tiltTarget - tilt) * Math.min(1, dt * 12);
+      const slope = Math.tan(tilt);                     // the surface stays level in the real world
       const K = TUNING.waveStiffness, D = TUNING.waveDamping, S = TUNING.waveSpread;
       const span = 2 * geo.topHalf / N;
       const maxH = (geo.level - geo.top) * 0.85;
@@ -215,8 +229,9 @@
         const c = cols[i];
         const l = cols[Math.max(0, i - 1)].h, r = cols[Math.min(N - 1, i + 1)].h;
         const xn = (colX(i) - geo.cx) / geo.topHalf;
-        let acc = -K * c.h - D * c.v + S * (l + r - 2 * c.h) / (span * span) * 0.02;
-        acc += px * xn * 0.32;                 // side-to-side movement tips the surface
+        const restH = clamp(slope * (colX(i) - geo.cx), -maxH, maxH);   // where the tilted surface wants to be
+        let acc = -K * (c.h - restH) - D * c.v + S * (l + r - 2 * c.h) / (span * span) * 0.02;
+        acc += px * xn * TUNING.sloshStrength;  // side-to-side movement sloshes the surface
         acc += -py * 0.02;                     // up and down movement bounces it a little
         if (swirl > 0) acc += Math.sin(i * 0.5 + performance.now() / 120) * 120;
         c.v += acc * dt;
@@ -229,7 +244,9 @@
         if (c.state === 'lifted') continue;
         const surf = surfaceAt(c.x);
         const sub = clamp((c.y + c.r - surf) / (2 * c.r), 0, 1);  // how much is under water
-        c.vy += (g - g * TUNING.buoyancy * sub) * dt;
+        const net = g * (1 - TUNING.buoyancy * sub);           // gravity minus floating
+        c.vy += net * Math.cos(tilt) * dt;
+        c.vx += net * Math.sin(tilt) * dt;
         c.vx += px * dt * 0.9;
         c.vy += py * dt * 0.9;
         if (swirl > 0) {                                        // stirring: spin around the middle
@@ -237,8 +254,9 @@
           c.vx += -dy * 9 * dt; c.vy += dx * 9 * dt;
           c.w += 3 * dt;
         }
-        const slope = (surfaceAt(c.x + 5) - surfaceAt(c.x - 5)) / 10;
-        c.vx += -slope * g * 0.35 * sub * dt;                   // slide down a tilted surface
+        // waves (not the steady tilt) push floating cubes along
+        const waveSlope = (surfaceAt(c.x + 5) - surfaceAt(c.x - 5)) / 10 + Math.tan(tilt);
+        c.vx += -waveSlope * g * 0.35 * sub * dt;
         if (swirl <= 0) c.w += -Math.sin(c.a) * 18 * dt;        // slowly turn upright so words are readable
         const drag = Math.exp(-(sub > 0 ? 2.4 * sub + 0.35 : 0.15) * dt);
         c.vx *= drag; c.vy *= drag; c.w *= Math.exp(-2.2 * dt);
@@ -304,7 +322,7 @@
     // "Still" means nothing moved on screen since the last frame
     // (less than a fifth of a pixel), so the loop can sleep.
     function isStill() {
-      let still = !(swirl > 0 || lifted || bubbles.length || Math.abs(pushX) + Math.abs(pushY) > 5);
+      let still = !(swirl > 0 || lifted || bubbles.length || Math.abs(pushX) + Math.abs(pushY) > 5 || Math.abs(tiltTarget - tilt) > 0.004);
       for (const c of cols) {
         if (Math.abs(c.h - (c.ph || 0)) > 0.05) still = false;
         c.ph = c.h;
