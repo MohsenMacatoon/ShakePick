@@ -250,6 +250,9 @@ button { cursor: pointer; }
 .history li { overflow-wrap: anywhere; padding: 2px 0; }
 .history li:first-child { color: var(--ink); font-weight: 700; }
 
+/* Version label at the bottom */
+.version { margin: 4px 0 0; text-align: center; color: var(--muted); font-size: .8rem; }
+
 /* ----- In-app pop-up ----- */
 .overlay {
   position: fixed;

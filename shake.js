@@ -79,8 +79,8 @@
     // opposite of gravity, so a phone held upright reads +9.8 upward.)
     let down = toScreen(-gx, -gy);
     if (sign === 0) {
-      if (Math.abs(down.y) > 5) signVotes += down.y > 0 ? 1 : -1;
-      if (Math.abs(signVotes) >= 12) sign = signVotes > 0 ? 1 : -1;
+      if (Math.abs(down.y) > 2.5) signVotes += down.y > 0 ? 1 : -1;
+      if (Math.abs(signVotes) >= 6) sign = signVotes > 0 ? 1 : -1;
     }
     const f = sign || 1;
     down = { x: down.x * f, y: down.y * f };

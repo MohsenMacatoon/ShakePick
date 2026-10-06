@@ -2,7 +2,7 @@
    Saves the app files on the phone so it works without internet.
    IMPORTANT: after editing any file, change the version below (v1 -> v2)
    so phones download the new files. */
-const CACHE = 'shakepick-v3';
+const CACHE = 'shakepick-v5';
 
 const FILES = [
   './',
@@ -17,7 +17,9 @@ const FILES = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)));
+  // cache: 'reload' skips the browser's own copy, so updates are always fresh
+  e.waitUntil(caches.open(CACHE).then(cache =>
+    cache.addAll(FILES.map(f => new Request(f, { cache: 'reload' })))));
   self.skipWaiting();
 });
 
