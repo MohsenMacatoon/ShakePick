@@ -2,7 +2,7 @@
    Saves the app files on the phone so it works without internet.
    IMPORTANT: after editing any file, change the version below (v1 -> v2)
    so phones download the new files. */
-const CACHE = 'shakepick-v1';
+const CACHE = 'shakepick-v3';
 
 const FILES = [
   './',
@@ -10,6 +10,7 @@ const FILES = [
   './style.css',
   './app.js',
   './shake.js',
+  './glass.js',
   './manifest.json',
   './icon.svg',
   './icon-512.png'

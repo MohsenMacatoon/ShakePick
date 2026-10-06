@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Type your options, shake your phone, get a random pick.">
   <meta name="theme-color" content="#2335C8">
-  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="description" content="Drop your options into a glass of ice, shake your phone, and one floats up.">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ShakePick">
   <title>ShakePick</title>
   <link rel="manifest" href="manifest.json">
@@ -15,64 +15,90 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="app">
 
+  <!-- Icons, used as <svg><use href="#i-name"/></svg> -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+      <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></symbol>
+    </defs>
+  </svg>
+
+  <main class="app">
     <header class="top">
       <h1 class="brand">ShakePick</h1>
       <span class="count" id="count">0 items</span>
     </header>
 
-    <!-- Result area: the ticket shows the picked item -->
-    <section class="stage" aria-label="Result">
-      <div class="ticket" id="ticket">
-        <p class="ticket-text" id="result" aria-live="polite">Add a few items, then shake</p>
+    <!-- The glass -->
+    <section class="stage" aria-label="Glass of ice cubes">
+      <p class="result is-placeholder" id="result" aria-live="polite">Add a few items, then shake</p>
+      <div class="glass-wrap">
+        <canvas class="glass" id="glass" role="img" aria-label="A glass of water with one ice cube for each item"></canvas>
       </div>
-      <p class="hint" id="hint">Shake your phone or tap Pick</p>
-      <div class="stage-actions">
-        <button class="btn-pick" id="pickBtn" type="button">Pick</button>
-        <button class="btn-allow" id="allowBtn" type="button" hidden>Allow shake</button>
-      </div>
+      <p class="hint" id="hint">Shake your phone to pick</p>
+      <button class="btn-allow" id="allowBtn" type="button" hidden>Allow shake</button>
     </section>
 
-    <!-- Item list -->
+    <!-- Saved lists and items -->
     <section class="panel" aria-label="Your items">
+      <div class="list-bar">
+        <label class="list-select">
+          <span class="sr-only">Saved list</span>
+          <select id="listSelect"></select>
+          <svg class="icon icon-sm" aria-hidden="true"><use href="#i-down"/></svg>
+        </label>
+        <button class="icon-btn" id="newListBtn" type="button" aria-label="New list"><svg class="icon"><use href="#i-plus"/></svg></button>
+        <button class="icon-btn" id="renameListBtn" type="button" aria-label="Rename list"><svg class="icon"><use href="#i-edit"/></svg></button>
+        <button class="icon-btn" id="deleteListBtn" type="button" aria-label="Delete list"><svg class="icon"><use href="#i-trash"/></svg></button>
+      </div>
+
       <form class="add" id="addForm" autocomplete="off">
         <label class="sr-only" for="itemInput">New item</label>
-        <textarea id="itemInput" rows="1" enterkeyhint="done"
-          placeholder="Type an item"></textarea>
+        <textarea id="itemInput" rows="1" enterkeyhint="done" placeholder="Type an item"></textarea>
         <button type="submit" class="btn-add">Add</button>
       </form>
-      <p class="tip">Separate several items with commas or new lines.</p>
+      <p class="tip">Each item drops in as an ice cube. Separate several with commas or new lines.</p>
 
       <ul class="chips" id="list"></ul>
-      <p class="empty" id="empty">Your list is empty. Add names, numbers, food, anything.</p>
+      <p class="empty" id="empty">This glass is empty. Add names, numbers, food, anything.</p>
 
       <div class="list-actions">
-        <button class="btn-text" id="clearBtn" type="button">Clear all</button>
+        <button class="btn-text" id="resetCountsBtn" type="button">Reset pick counts</button>
+        <button class="btn-text btn-text-danger" id="clearBtn" type="button">Clear all</button>
       </div>
     </section>
 
-    <!-- Settings -->
     <section class="panel options" aria-label="Options">
-      <label class="toggle">
-        <input type="checkbox" id="optRemove">
-        <span>Remove an item after it's picked</span>
-      </label>
-      <label class="toggle" id="vibrateRow">
-        <input type="checkbox" id="optVibrate" checked>
-        <span>Vibrate on pick</span>
-      </label>
+      <label class="toggle"><input type="checkbox" id="optRemove"><span>Remove an item after it's picked</span></label>
+      <label class="toggle" id="vibrateRow"><input type="checkbox" id="optVibrate" checked><span>Vibrate on pick</span></label>
     </section>
 
-    <!-- Last 5 picks -->
     <section class="panel" id="historyBox" aria-label="Recent picks" hidden>
       <h2 class="panel-title">Recent picks</h2>
       <ol class="history" id="history"></ol>
     </section>
-
   </main>
 
+  <!-- In-app pop-up (the browser's own shows the website address) -->
+  <div class="overlay" id="dialog" hidden>
+    <form class="dialog" id="dialogForm" role="dialog" aria-modal="true" aria-labelledby="dialogTitle" novalidate>
+      <h2 class="dialog-title" id="dialogTitle"></h2>
+      <p class="dialog-text" id="dialogText"></p>
+      <input class="dialog-input" type="text" id="dialogInput" maxlength="30" autocomplete="off" aria-labelledby="dialogTitle">
+      <div class="dialog-actions">
+        <button class="btn-ghost" type="button" id="dialogCancel">Cancel</button>
+        <button class="btn-solid" type="submit" id="dialogOk">OK</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="toast" id="toast" role="status" hidden></div>
+
   <script src="shake.js"></script>
+  <script src="glass.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

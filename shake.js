@@ -11,6 +11,8 @@
 
   let onShake = null;
   let onReady = null;
+  let onMotion = null;      // gets every movement, so the water can slosh
+  let hp = null;            // for phones that only report acceleration with gravity
   let listening = false;
   let gotReading = false;
   let last = null;
@@ -24,6 +26,20 @@
     if (!gotReading) {
       gotReading = true;
       if (onReady) onReady(); // sensor is working
+    }
+
+    // Movement without gravity, in m/s² (x = right, y = up on the screen).
+    if (onMotion) {
+      const lin = e.acceleration;
+      if (lin && lin.x !== null && lin.y !== null) {
+        onMotion(lin.x, lin.y);
+      } else {
+        // Remove gravity with a simple high-pass filter
+        if (!hp) hp = { gx: a.x, gy: a.y };
+        hp.gx = hp.gx * 0.9 + a.x * 0.1;
+        hp.gy = hp.gy * 0.9 + a.y * 0.1;
+        onMotion(a.x - hp.gx, a.y - hp.gy);
+      }
     }
 
     if (!last) { last = { x: a.x, y: a.y, z: a.z }; return; }
@@ -61,10 +77,12 @@
     return 'ready';
   }
 
-  // Start detecting. shakeFn runs on each shake; readyFn runs once the sensor sends data.
-  function init(shakeFn, readyFn) {
+  // Start detecting. shakeFn runs on each shake; readyFn runs once the sensor
+  // sends data; motionFn (optional) gets every movement reading.
+  function init(shakeFn, readyFn, motionFn) {
     onShake = shakeFn;
     onReady = readyFn;
+    onMotion = motionFn || null;
     const status = getStatus();
     // Listen even on iPhone: if permission was already given this session,
     // readings arrive and readyFn hides the "Allow shake" button.
